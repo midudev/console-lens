@@ -1,3 +1,5 @@
+<img width="4052" height="2372" alt="CleanShot 2026-06-24 at 18 05 34@2x" src="https://github.com/user-attachments/assets/b96dda6e-429d-4896-aaca-34ee0c3c8cb0" />
+
 # 🔎 Console Lens
 
 > ⚠️ **Beta.** Console Lens is under active development — expect rough edges and
