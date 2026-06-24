@@ -1,0 +1,194 @@
+{
+  "name": "console-lens",
+  "displayName": "Console Lens",
+  "publisher": "console-lens",
+  "description": "See console.log output and runtime values inline in your editor, in real time.",
+  "icon": "icon.png",
+  "version": "0.1.20",
+  "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/midudev/console-lens.git"
+  },
+  "engines": {
+    "vscode": "^1.90.0",
+    "node": ">=18"
+  },
+  "categories": [
+    "Debuggers",
+    "Other"
+  ],
+  "keywords": [
+    "console",
+    "log",
+    "inline",
+    "debug",
+    "logpoint"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension/index.js",
+  "exports": {
+    "./browser": "./injector/browser-client.mjs",
+    "./preload": "./out/agent/preload.js",
+    "./package.json": "./package.json"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "console-lens.showPanel",
+        "title": "Console Lens: Open panel (logs & errors)"
+      },
+      {
+        "command": "console-lens.toggle",
+        "title": "Console Lens: Toggle On/Off"
+      },
+      {
+        "command": "console-lens.clear",
+        "title": "Console Lens: Clear All Inline Logs"
+      },
+      {
+        "command": "console-lens.addLogpoint",
+        "title": "Console Lens: Add/edit logpoint on this line"
+      },
+      {
+        "command": "console-lens.toggleLogpointHere",
+        "title": "Console Lens: Toggle logpoint on this line"
+      },
+      {
+        "command": "console-lens.editLogpoint",
+        "title": "Console Lens: Edit logpoint"
+      },
+      {
+        "command": "console-lens.removeLogpoint",
+        "title": "Console Lens: Remove logpoint"
+      },
+      {
+        "command": "console-lens.toggleLogpointEnabled",
+        "title": "Console Lens: Enable/disable logpoint"
+      },
+      {
+        "command": "console-lens.toggleCapture",
+        "title": "Console Lens: Pause/Resume capture"
+      },
+      {
+        "command": "console-lens.exportLogs",
+        "title": "Console Lens: Export logs to a file"
+      },
+      {
+        "command": "console-lens.copyNodeOptions",
+        "title": "Console Lens: Copy NODE_OPTIONS for external terminals"
+      },
+      {
+        "command": "console-lens.injectActiveTerminal",
+        "title": "Console Lens: Inject into active terminal"
+      },
+      {
+        "command": "console-lens.copyMcpConfig",
+        "title": "Console Lens: Copy MCP config (for Cursor/Claude/Windsurf/Cline)"
+      },
+      {
+        "command": "console-lens.installShellIntegration",
+        "title": "Console Lens: Enable for all terminals (shell integration)"
+      },
+      {
+        "command": "console-lens.uninstallShellIntegration",
+        "title": "Console Lens: Disable for all terminals (remove shell integration)"
+      },
+      {
+        "command": "console-lens.cleanup",
+        "title": "Console Lens: Clean up (remove shell integration & cache before uninstall)"
+      }
+    ],
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "console-lens",
+        "label": "Console Lens (runtime logs & errors)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "console-lens.toggleLogpointHere",
+        "key": "ctrl+alt+l",
+        "mac": "cmd+alt+l",
+        "when": "editorTextFocus"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "console-lens.addLogpoint",
+          "group": "debug@10",
+          "when": "editorTextFocus"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "console-lens.editLogpoint",
+          "when": "false"
+        },
+        {
+          "command": "console-lens.removeLogpoint",
+          "when": "false"
+        },
+        {
+          "command": "console-lens.toggleLogpointEnabled",
+          "when": "false"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Console Lens",
+      "properties": {
+        "consoleLens.port": {
+          "type": "number",
+          "default": 9111,
+          "description": "TCP port the Console Lens server listens on (browser WebSocket uses port + 1)."
+        },
+        "consoleLens.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show inline console output."
+        },
+        "consoleLens.maxInlineLength": {
+          "type": "number",
+          "default": 200,
+          "description": "Maximum characters shown inline per log."
+        },
+        "consoleLens.autoAttachTerminals": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically attach the agent to integrated terminals by exporting NODE_OPTIONS into them (covers both already-open and new terminals). Disable if you prefer to rely only on the environment-variable injection."
+        },
+        "consoleLens.shellIntegration": {
+          "type": "boolean",
+          "default": true,
+          "description": "Make Console Lens work in EVERY terminal (iTerm, Warp, Terminal.app, …) by adding NODE_OPTIONS to your shell profile (~/.zshrc, ~/.bashrc or fish config), inside clearly-marked fences. Applied automatically. Turn off to remove it."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -w -p ./",
+    "bundle": "npm run bundle:extension && npm run bundle:broker",
+    "bundle:extension": "npx -y esbuild@0.21.5 src/extension/index.ts --bundle --platform=node --target=node18 --external:vscode --format=cjs --outfile=out/extension/index.js",
+    "bundle:broker": "npx -y esbuild@0.21.5 src/broker/broker.ts --bundle --platform=node --target=node18 --format=cjs --outfile=out/broker/broker.js",
+    "package": "npm run compile && npm run bundle && npx -y @vscode/vsce@^3 package --no-dependencies",
+    "reinstall": "bash scripts/reinstall.sh",
+    "pretest": "npm run compile",
+    "test": "node --test --test-timeout=30000 out/test/*.test.js",
+    "viewer": "node out/cli/viewer.js",
+    "demo": "node --require ./out/agent/preload.js demo/node-demo.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.90.0",
+    "@types/ws": "^8.5.10",
+    "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  }
+}

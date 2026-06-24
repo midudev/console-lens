@@ -1,0 +1,16 @@
+# sources & build tooling (extension is bundled into out/extension/index.js)
+.vscode/**
+src/**
+examples/**
+demo/**
+scripts/**
+node_modules/**
+out/test/**
+**/*.map
+**/*.ts
+!injector/**
+tsconfig.json
+.gitignore
+.npmrc
+package-lock.json
+pnpm-lock.yaml
