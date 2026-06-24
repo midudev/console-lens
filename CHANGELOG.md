@@ -2,6 +2,25 @@
 
 All notable changes to Console Lens are documented here.
 
+## 0.1.21
+
+- **Richer browser value formatting.** The browser client now renders complex
+  values the way DevTools does instead of collapsing them to `{}`: DOM nodes show
+  as `<tag#id.class…>`, and `Map`, `Set`, `Error`, `RegExp`, `Date`, typed
+  arrays, `NodeList`/`HTMLCollection`, `Blob`/`File`, `URL`, class instances and
+  more all get a readable representation (and stay expandable in the panel).
+- **Less network noise.** Dev-server/framework-internal requests (Vite + Astro
+  module/asset loading like `?astro&type=script`, `/@vite/…`, `/@id/…`,
+  `node_modules/.vite/…`, HMR pings) are no longer captured as network logs —
+  they aren't app requests. Applies to both the Node agent and browser client.
+- **Responsive panel.** Reduced side padding, and on a narrow (side-bar) panel
+  each row stacks vertically — a compact meta line with the message at full
+  width — so content is never squeezed into a one-character column.
+- **Configurable history limit.** New `consoleLens.maxEvents` setting (default
+  5000) caps how many events are kept in the panel and events file; lower it if a
+  high-frequency log loop makes the panel sluggish. (The log was already capped,
+  not unbounded — now you control the cap.)
+
 ## 0.1.20
 
 - **Inline values clear when you edit the line.** Editing or deleting a line now
