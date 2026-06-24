@@ -126,7 +126,7 @@ export class LensPanel {
   #app { display: flex; height: 100vh; min-height: 0; }
   #left { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
 
-  .toolbar { display: flex; gap: 2px; align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--vscode-panel-border); }
+  .toolbar { display: flex; gap: 2px; align-items: center; padding: 6px 6px; border-bottom: 1px solid var(--vscode-panel-border); }
   .toolbar input { flex: 1; min-width: 0; height: 26px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border, transparent); padding: 0 8px; border-radius: 5px; outline: none; }
   .toolbar input:focus { border-color: var(--vscode-focusBorder); }
   .tb-sep { width: 1px; height: 16px; background: var(--vscode-panel-border); margin: 0 4px; flex: none; }
@@ -143,7 +143,7 @@ export class LensPanel {
   .iconbtn.autobtn.on { color: var(--vscode-charts-blue, #4a9eff); background: var(--vscode-toolbar-hoverBackground, rgba(127,127,127,.14)); }
   .iconbtn.clearbtn:hover { color: var(--vscode-errorForeground); }
 
-  .chips { display: flex; gap: 4px; align-items: center; padding: 5px 8px; border-bottom: 1px solid var(--vscode-panel-border); flex-wrap: wrap; }
+  .chips { display: flex; gap: 4px; align-items: center; padding: 5px 6px; border-bottom: 1px solid var(--vscode-panel-border); flex-wrap: wrap; }
   .chip { font-size: 11px; line-height: 18px; padding: 1px 9px; border-radius: 10px; cursor: pointer; border: 1px solid var(--vscode-panel-border); color: var(--vscode-descriptionForeground); user-select: none; transition: background .12s, color .12s; }
   .chip:hover { color: var(--vscode-foreground); border-color: var(--vscode-contrastActiveBorder, var(--vscode-focusBorder)); }
   .chip.active { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border-color: transparent; }
@@ -158,7 +158,7 @@ export class LensPanel {
      place — no separate detail pane, no click needed to read a log. A thin
      separator, a level-colored left rail, and a level-tinted background for
      warnings/errors (all from theme tokens). */
-  .row { position: relative; display: flex; align-items: flex-start; gap: 7px; padding: 3px 10px 3px 7px; border-left: 3px solid transparent; border-bottom: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border)); min-width: 0; }
+  .row { position: relative; display: flex; align-items: flex-start; gap: 7px; padding: 3px 6px 3px 6px; border-left: 3px solid transparent; border-bottom: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border)); min-width: 0; }
   .row.error { background: var(--vscode-inputValidation-errorBackground, rgba(255,77,77,.08)); border-left-color: var(--vscode-editorError-foreground, var(--vscode-errorForeground)); }
   .row.warn  { background: var(--vscode-inputValidation-warningBackground, rgba(220,170,40,.08)); border-left-color: var(--vscode-editorWarning-foreground, #d7a847); }
   .row.info  { border-left-color: var(--vscode-editorInfo-foreground, #4a9eff); }
@@ -221,6 +221,19 @@ export class LensPanel {
   .tree .ty { color: var(--vscode-descriptionForeground); }
   .tree .more { padding-left: 26px; color: var(--vscode-descriptionForeground); font-style: italic; }
   .argsep { margin: 8px 0 4px; color: var(--vscode-descriptionForeground); font-size: 11px; }
+
+  /* Narrow panel (docked in a side bar): stack each row vertically — a compact
+     meta line (icon · time · file:line) with the message at full width below, so
+     the content is never squeezed into a one-character-wide column. The webview
+     viewport width is the panel width, so this media query keys off it directly. */
+  @media (max-width: 480px) {
+    .row { flex-wrap: wrap; gap: 1px 6px; padding: 4px 6px; }
+    .row > .lvlicon, .row > .badge { order: 0; margin-top: 0; }
+    .row > .ts { order: 1; margin-top: 0; align-self: center; }
+    .row > .loc { order: 2; margin-left: auto; max-width: 70%; margin-top: 0; align-self: center; text-align: right; }
+    .row > .row-actions { order: 3; margin-top: 0; align-self: center; }
+    .row > .content { order: 4; flex-basis: 100%; width: 100%; min-width: 0; margin-top: 2px; }
+  }
 </style>
 </head>
 <body>
