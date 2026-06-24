@@ -1,5 +1,6 @@
 import type { NetworkMessage } from '../shared/protocol';
 import { captureCallSite } from '../shared/stack';
+import { isInternalRequest } from '../shared/dev-requests';
 import { resolveSourcePath } from './resolve-path';
 import type { Transport } from './transport';
 
@@ -58,12 +59,16 @@ export function patchFetch(transport: Transport, session: string, cwd?: string):
   };
 
   const wrapped = async function fetchWithLens(input: unknown, init?: unknown): Promise<unknown> {
-    const site = captureCallSite([__filename]);
-    const start = Date.now();
     const initObj = (init ?? {}) as { method?: string; body?: unknown };
     const inputObj = input as { url?: string; method?: string };
-    const method = (initObj.method || inputObj?.method || 'GET').toUpperCase();
     const url = typeof input === 'string' ? input : inputObj?.url ?? String(input);
+    // Skip the dev server's own module/asset/HMR traffic — not app requests.
+    if (isInternalRequest(url)) {
+      return (original as (...a: unknown[]) => Promise<unknown>)(input, init);
+    }
+    const site = captureCallSite([__filename]);
+    const start = Date.now();
+    const method = (initObj.method || inputObj?.method || 'GET').toUpperCase();
     const requestBody = bodyToString(initObj.body);
 
     const base = {

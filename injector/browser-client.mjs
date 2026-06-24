@@ -43,26 +43,115 @@ export function attachConsoleLens(options = {}) {
     else if (queue.length < MAX_QUEUE) queue.push(line);
   }
 
-  function serialize(v) {
-    if (typeof v === 'string') return JSON.stringify(v);
-    const seen = new WeakSet();
+  const MAX_DEPTH = 4, MAX_ENTRIES = 100, MAX_STR = 200;
+
+  function isNode(v) {
+    return typeof Node !== 'undefined' && v instanceof Node;
+  }
+
+  function describeNode(el) {
     try {
-      return JSON.stringify(v, (_k, val) => {
-        if (typeof val === 'object' && val !== null) {
-          if (seen.has(val)) return '[Circular]';
-          seen.add(val);
+      if (el.nodeType === 1) {
+        let s = el.tagName ? el.tagName.toLowerCase() : 'element';
+        if (el.id) s += '#' + el.id;
+        const cls = el.classList;
+        if (cls && cls.length) {
+          for (let i = 0; i < Math.min(cls.length, 8); i++) s += '.' + cls[i];
+          if (cls.length > 8) s += '…';
         }
-        if (typeof val === 'bigint') return val.toString() + 'n';
-        if (typeof val === 'function') return '[Function ' + (val.name || 'anonymous') + ']';
-        return val;
-      });
-    } catch (e) {
-      try {
-        return String(v);
-      } catch (e2) {
-        return '[unserializable]';
+        return '<' + s + '>';
       }
+      if (el.nodeType === 3) return '#text "' + String(el.textContent || '').slice(0, 40) + '"';
+      if (el.nodeType === 9) return '#document';
+      if (el.nodeType === 11) return '#document-fragment';
+      return '<' + (el.nodeName ? String(el.nodeName).toLowerCase() : 'node') + '>';
+    } catch (e) {
+      return '[node]';
     }
+  }
+
+  // Best-effort label for values JSON.stringify would collapse to `{}`.
+  function describeSpecial(v, depth, seen) {
+    try {
+      if (isNode(v)) return describeNode(v);
+      if (v instanceof Date) return isNaN(v.getTime()) ? 'Invalid Date' : v.toISOString();
+      if (v instanceof RegExp) return String(v);
+      if (v instanceof Error) return (v.name || 'Error') + ': ' + (v.message || '');
+      if (typeof Map !== 'undefined' && v instanceof Map) {
+        const me = []; let c = 0;
+        v.forEach((val, key) => { if (c++ < 50) me.push(inspect(key, depth + 1, seen) + ' => ' + inspect(val, depth + 1, seen)); });
+        return 'Map(' + v.size + ')' + (me.length ? ' { ' + me.join(', ') + (v.size > 50 ? ', …' : '') + ' }' : ' {}');
+      }
+      if (typeof Set !== 'undefined' && v instanceof Set) {
+        const se = []; let c2 = 0;
+        v.forEach((val) => { if (c2++ < 50) se.push(inspect(val, depth + 1, seen)); });
+        return 'Set(' + v.size + ')' + (se.length ? ' { ' + se.join(', ') + (v.size > 50 ? ', …' : '') + ' }' : ' {}');
+      }
+      if (typeof Promise !== 'undefined' && v instanceof Promise) return 'Promise { <pending> }';
+      if (typeof URL !== 'undefined' && v instanceof URL) return 'URL ' + v.href;
+      if (typeof URLSearchParams !== 'undefined' && v instanceof URLSearchParams) return 'URLSearchParams { ' + v.toString() + ' }';
+      if (typeof window !== 'undefined' && v === window) return '[window]';
+      if (typeof DataView !== 'undefined' && v instanceof DataView) return 'DataView(' + v.byteLength + ')';
+      if (typeof ArrayBuffer !== 'undefined' && ArrayBuffer.isView && ArrayBuffer.isView(v)) {
+        return ((v.constructor && v.constructor.name) || 'TypedArray') + '(' + v.length + ') [' + Array.prototype.slice.call(v, 0, 20).join(', ') + (v.length > 20 ? ', …' : '') + ']';
+      }
+      if (typeof ArrayBuffer !== 'undefined' && v instanceof ArrayBuffer) return 'ArrayBuffer(' + v.byteLength + ')';
+      if (typeof Blob !== 'undefined' && v instanceof Blob) return 'Blob { size: ' + v.size + ', type: ' + JSON.stringify(v.type) + ' }';
+      if (typeof Event !== 'undefined' && v instanceof Event) return (v.type || 'event') + ' Event';
+      const brand = Object.prototype.toString.call(v);
+      const bm = /^\[object (NodeList|HTMLCollection|DOMTokenList|NamedNodeMap)\]$/.exec(brand);
+      if (bm) {
+        const len = v.length || 0, arr = [];
+        for (let i = 0; i < Math.min(len, 20); i++) arr.push(inspect(v[i], depth + 1, seen));
+        return bm[1] + '(' + len + ') [' + arr.join(', ') + (len > 20 ? ', …' : '') + ']';
+      }
+    } catch (e) {}
+    return undefined;
+  }
+
+  // A compact, readable representation of any value (a small util.inspect).
+  function inspect(v, depth = 0, seen = []) {
+    if (v === null) return 'null';
+    if (v === undefined) return 'undefined';
+    const ty = typeof v;
+    if (ty === 'string') {
+      const q = JSON.stringify(v);
+      return q.length > MAX_STR ? q.slice(0, MAX_STR) + '…"' : q;
+    }
+    if (ty === 'number' || ty === 'boolean') return String(v);
+    if (ty === 'bigint') return String(v) + 'n';
+    if (ty === 'symbol') { try { return v.toString(); } catch (e) { return 'Symbol()'; } }
+    if (ty === 'function') {
+      try { if (/^class[\s{]/.test(Function.prototype.toString.call(v))) return 'class ' + (v.name || '(anonymous)'); } catch (e) {}
+      return 'ƒ ' + (v.name || 'anonymous') + '()';
+    }
+    const sp = describeSpecial(v, depth, seen);
+    if (sp !== undefined) return sp;
+    if (seen.indexOf(v) !== -1) return '[Circular]';
+    if (depth >= MAX_DEPTH) return Array.isArray(v) ? '[Array]' : '[Object]';
+    seen = seen.concat([v]);
+    try {
+      if (Array.isArray(v)) {
+        const items = [];
+        for (let i = 0; i < Math.min(v.length, MAX_ENTRIES); i++) items.push(inspect(v[i], depth + 1, seen));
+        if (v.length > MAX_ENTRIES) items.push('… ' + (v.length - MAX_ENTRIES) + ' more');
+        return '[' + items.join(', ') + ']';
+      }
+      let ctor = '';
+      try { ctor = (v.constructor && v.constructor.name) || ''; } catch (e) {}
+      const keys = Object.keys(v);
+      const pairs = [];
+      for (let k = 0; k < Math.min(keys.length, MAX_ENTRIES); k++) pairs.push(keys[k] + ': ' + inspect(v[keys[k]], depth + 1, seen));
+      if (keys.length > MAX_ENTRIES) pairs.push('… ' + (keys.length - MAX_ENTRIES) + ' more');
+      const body = pairs.length ? '{ ' + pairs.join(', ') + ' }' : '{}';
+      return ctor && ctor !== 'Object' ? ctor + ' ' + body : body;
+    } catch (e) {
+      try { return String(v); } catch (e2) { return '[unserializable]'; }
+    }
+  }
+
+  function serialize(v) {
+    return inspect(v, 0, []);
   }
 
   function callSite() {

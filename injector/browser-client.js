@@ -36,19 +36,152 @@
     else if (queue.length < MAX_QUEUE) queue.push(line);
   }
 
-  function serialize(v) {
-    if (typeof v === 'string') return JSON.stringify(v);
+  function isNode(v) {
+    return typeof Node !== 'undefined' && v instanceof Node;
+  }
+
+  // A DOM node has no enumerable own properties, so JSON.stringify renders it as
+  // an empty `{}`. Describe it like the browser console does instead: a CSS-ish
+  // selector (tag#id.class…) so `console.log(el)` is actually readable.
+  function describeNode(el) {
     try {
-      return JSON.stringify(v, function () {
-        return arguments[1];
-      });
-    } catch (e) {
-      try {
-        return String(v);
-      } catch (e2) {
-        return '[unserializable]';
+      if (el.nodeType === 1) {
+        var s = el.tagName ? el.tagName.toLowerCase() : 'element';
+        if (el.id) s += '#' + el.id;
+        var cls = el.classList;
+        if (cls && cls.length) {
+          for (var i = 0; i < Math.min(cls.length, 8); i++) s += '.' + cls[i];
+          if (cls.length > 8) s += '…';
+        }
+        return '<' + s + '>';
       }
+      if (el.nodeType === 3) return '#text "' + String(el.textContent || '').slice(0, 40) + '"';
+      if (el.nodeType === 8) return '<!-- comment -->';
+      if (el.nodeType === 9) return '#document';
+      if (el.nodeType === 11) return '#document-fragment';
+      return '<' + (el.nodeName ? String(el.nodeName).toLowerCase() : 'node') + '>';
+    } catch (e) {
+      return '[node]';
     }
+  }
+
+  // Dev-server / framework internals (Vite + Astro module and asset loading,
+  // HMR). These aren't app requests, so they must not show up as network logs.
+  function isInternalRequest(url) {
+    try {
+      var u = String(url);
+      return (
+        /[?&](astro|vue|svelte)&type=/.test(u) || // SFC sub-modules (?astro&type=script…)
+        /[?&]astro(&|=|$)/.test(u) ||
+        /\/@(vite|id|fs|react-refresh)\//.test(u) ||
+        /\/@vite\/client\b/.test(u) ||
+        /\/node_modules\/\.vite\//.test(u) ||
+        /[?&]html-proxy\b/.test(u) ||
+        /[?&]t=\d{10,}/.test(u) || // Vite HMR cache-busting timestamp
+        /hot-update\.(json|js|mjs)\b/.test(u) // webpack / Next HMR
+      );
+    } catch (e) {
+      return false;
+    }
+  }
+
+  var MAX_DEPTH = 4, MAX_ENTRIES = 100, MAX_STR = 200;
+
+  // Best-effort label for values JSON.stringify would collapse to `{}`: DOM
+  // nodes & collections, Map, Set, Error, RegExp, Date, typed arrays, Blob/File,
+  // Promise, URL… Returns undefined for plain objects/arrays (caller recurses).
+  function describeSpecial(v, depth, seen) {
+    try {
+      if (isNode(v)) return describeNode(v);
+      if (v instanceof Date) return isNaN(v.getTime()) ? 'Invalid Date' : v.toISOString();
+      if (v instanceof RegExp) return String(v);
+      if (v instanceof Error) return (v.name || 'Error') + ': ' + (v.message || '');
+      if (typeof Map !== 'undefined' && v instanceof Map) {
+        var me = [], c = 0;
+        v.forEach(function (val, key) {
+          if (c++ < 50) me.push(inspect(key, depth + 1, seen) + ' => ' + inspect(val, depth + 1, seen));
+        });
+        return 'Map(' + v.size + ')' + (me.length ? ' { ' + me.join(', ') + (v.size > 50 ? ', …' : '') + ' }' : ' {}');
+      }
+      if (typeof Set !== 'undefined' && v instanceof Set) {
+        var se = [], c2 = 0;
+        v.forEach(function (val) { if (c2++ < 50) se.push(inspect(val, depth + 1, seen)); });
+        return 'Set(' + v.size + ')' + (se.length ? ' { ' + se.join(', ') + (v.size > 50 ? ', …' : '') + ' }' : ' {}');
+      }
+      if (typeof Promise !== 'undefined' && v instanceof Promise) return 'Promise { <pending> }';
+      if (typeof WeakMap !== 'undefined' && v instanceof WeakMap) return 'WeakMap {}';
+      if (typeof WeakSet !== 'undefined' && v instanceof WeakSet) return 'WeakSet {}';
+      if (typeof URL !== 'undefined' && v instanceof URL) return 'URL ' + v.href;
+      if (typeof URLSearchParams !== 'undefined' && v instanceof URLSearchParams) return 'URLSearchParams { ' + v.toString() + ' }';
+      if (typeof window !== 'undefined' && v === window) return '[window]';
+      if (typeof DataView !== 'undefined' && v instanceof DataView) return 'DataView(' + v.byteLength + ')';
+      if (typeof ArrayBuffer !== 'undefined' && ArrayBuffer.isView && ArrayBuffer.isView(v)) {
+        var ta = Array.prototype.slice.call(v, 0, 20).join(', ');
+        return ((v.constructor && v.constructor.name) || 'TypedArray') + '(' + v.length + ') [' + ta + (v.length > 20 ? ', …' : '') + ']';
+      }
+      if (typeof ArrayBuffer !== 'undefined' && v instanceof ArrayBuffer) return 'ArrayBuffer(' + v.byteLength + ')';
+      if (typeof File !== 'undefined' && v instanceof File) return 'File ' + JSON.stringify(v.name) + ' { size: ' + v.size + ', type: ' + JSON.stringify(v.type) + ' }';
+      if (typeof Blob !== 'undefined' && v instanceof Blob) return 'Blob { size: ' + v.size + ', type: ' + JSON.stringify(v.type) + ' }';
+      if (typeof Event !== 'undefined' && v instanceof Event) return (v.type || 'event') + ' Event';
+      if (typeof FormData !== 'undefined' && v instanceof FormData) return 'FormData {}';
+      var brand = Object.prototype.toString.call(v);
+      var bm = /^\[object (NodeList|HTMLCollection|DOMTokenList|NamedNodeMap)\]$/.exec(brand);
+      if (bm) {
+        var len = v.length || 0, arr = [];
+        for (var i = 0; i < Math.min(len, 20); i++) arr.push(inspect(v[i], depth + 1, seen));
+        return bm[1] + '(' + len + ') [' + arr.join(', ') + (len > 20 ? ', …' : '') + ']';
+      }
+    } catch (e) {}
+    return undefined;
+  }
+
+  // A compact, readable representation of any value — a small util.inspect for
+  // the browser — so complex objects never collapse to `{}` in the editor.
+  function inspect(v, depth, seen) {
+    depth = depth || 0; seen = seen || [];
+    if (v === null) return 'null';
+    if (v === undefined) return 'undefined';
+    var ty = typeof v;
+    if (ty === 'string') {
+      var q = JSON.stringify(v);
+      return q.length > MAX_STR ? q.slice(0, MAX_STR) + '…"' : q;
+    }
+    if (ty === 'number' || ty === 'boolean') return String(v);
+    if (ty === 'bigint') return String(v) + 'n';
+    if (ty === 'symbol') { try { return v.toString(); } catch (e) { return 'Symbol()'; } }
+    if (ty === 'function') {
+      try { if (/^class[\s{]/.test(Function.prototype.toString.call(v))) return 'class ' + (v.name || '(anonymous)'); } catch (e) {}
+      return 'ƒ ' + (v.name || 'anonymous') + '()';
+    }
+    var sp = describeSpecial(v, depth, seen);
+    if (sp !== undefined) return sp;
+    if (seen.indexOf(v) !== -1) return '[Circular]';
+    if (depth >= MAX_DEPTH) return Array.isArray(v) ? '[Array]' : '[Object]';
+    seen = seen.concat([v]);
+    try {
+      if (Array.isArray(v)) {
+        var items = [];
+        for (var i = 0; i < Math.min(v.length, MAX_ENTRIES); i++) items.push(inspect(v[i], depth + 1, seen));
+        if (v.length > MAX_ENTRIES) items.push('… ' + (v.length - MAX_ENTRIES) + ' more');
+        return '[' + items.join(', ') + ']';
+      }
+      var ctor = '';
+      try { ctor = (v.constructor && v.constructor.name) || ''; } catch (e) {}
+      var keys = Object.keys(v);
+      var pairs = [];
+      for (var k = 0; k < Math.min(keys.length, MAX_ENTRIES); k++) {
+        pairs.push(keys[k] + ': ' + inspect(v[keys[k]], depth + 1, seen));
+      }
+      if (keys.length > MAX_ENTRIES) pairs.push('… ' + (keys.length - MAX_ENTRIES) + ' more');
+      var body = pairs.length ? '{ ' + pairs.join(', ') + ' }' : '{}';
+      return ctor && ctor !== 'Object' ? ctor + ' ' + body : body;
+    } catch (e) {
+      try { return String(v); } catch (e2) { return '[unserializable]'; }
+    }
+  }
+
+  function serialize(v) {
+    return inspect(v, 0, []);
   }
 
   function callSite() {
@@ -163,6 +296,49 @@
     if (ty === 'number' || ty === 'boolean' || ty === 'undefined' || ty === 'bigint') return { t: ty, preview: String(value) };
     if (ty === 'symbol') return { t: 'symbol', preview: String(value) };
     if (ty === 'function') return { t: 'function', preview: 'ƒ ' + (value.name || 'anonymous') + '()' };
+    // Special objects: render them meaningfully and, where useful, expandable —
+    // instead of the empty `{}` JSON.stringify would produce.
+    if (isNode(value)) {
+      var nn = { t: 'node', preview: describeNode(value) };
+      if (value.nodeType === 1 && depth < 4) {
+        nn.children = [];
+        if (value.id) nn.children.push({ key: 'id', node: { t: 'string', preview: JSON.stringify(value.id) } });
+        var cls = value.getAttribute && value.getAttribute('class');
+        if (cls) nn.children.push({ key: 'class', node: { t: 'string', preview: JSON.stringify(cls) } });
+        var txt = (value.textContent || '').trim();
+        if (txt) nn.children.push({ key: 'textContent', node: { t: 'string', preview: JSON.stringify(txt.slice(0, 80)) } });
+      }
+      return nn;
+    }
+    if (typeof Map !== 'undefined' && value instanceof Map) {
+      var mn = { t: 'Map', preview: 'Map(' + value.size + ')' };
+      if (depth < 4) {
+        mn.children = []; var mseen = seen.concat([value]); var mc = 0;
+        value.forEach(function (val, key) {
+          if (mc++ < 100) mn.children.push({ key: typeof key === 'object' && key !== null ? inspect(key, 0, []) : String(key), node: buildTree(val, depth + 1, mseen) });
+        });
+        mn.truncated = value.size > 100;
+      }
+      return mn;
+    }
+    if (typeof Set !== 'undefined' && value instanceof Set) {
+      var setN = { t: 'Set', preview: 'Set(' + value.size + ')' };
+      if (depth < 4) {
+        setN.children = []; var sseen = seen.concat([value]); var si = 0;
+        value.forEach(function (val) { if (si < 100) setN.children.push({ key: String(si++), node: buildTree(val, depth + 1, sseen) }); });
+        setN.truncated = value.size > 100;
+      }
+      return setN;
+    }
+    if (value instanceof Error) {
+      return { t: 'Error', preview: (value.name || 'Error') + ': ' + (value.message || ''), children: [
+        { key: 'name', node: { t: 'string', preview: JSON.stringify(value.name || 'Error') } },
+        { key: 'message', node: { t: 'string', preview: JSON.stringify(value.message || '') } },
+        { key: 'stack', node: { t: 'string', preview: JSON.stringify(String(value.stack || '').slice(0, 800)) } },
+      ] };
+    }
+    var special = describeSpecial(value, depth, seen);
+    if (special !== undefined) return { t: (value.constructor && value.constructor.name) || 'object', preview: special };
     if (seen.indexOf(value) !== -1) return { t: 'circular', preview: '[Circular]' };
     seen = seen.concat([value]);
     try {
@@ -268,10 +444,12 @@
       return undefined;
     };
     var wrapped = function (input, init) {
+      var url = typeof input === 'string' ? input : (input && input.url) || String(input);
+      // Skip the dev server's own module/asset/HMR traffic — not app requests.
+      if (isInternalRequest(url)) return nativeFetch(input, init);
       var site = callSite();
       var start = Date.now();
       var method = ((init && init.method) || (input && input.method) || 'GET').toUpperCase();
-      var url = typeof input === 'string' ? input : (input && input.url) || String(input);
       var requestBody = reqBodyOf(init);
       var emit = function (status, ok, responseBody, error) {
         send({
@@ -326,6 +504,7 @@
   }
 
   function emitNet(method, url, status, ok, requestBody, responseBody, error, durationMs, site) {
+    if (isInternalRequest(url)) return;
     send({
       v: 1, type: 'network', method: method, url: url, status: status, ok: ok,
       requestBody: requestBody, responseBody: responseBody, error: error, durationMs: durationMs,
