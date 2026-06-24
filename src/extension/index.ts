@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import * as child_process from 'node:child_process';
 import { DEFAULT_TCP_PORT, PORT_ENV, WS_PORT_ENV, wsPortFor } from '../shared/protocol';
@@ -9,15 +8,15 @@ import { connectToBroker } from '../broker/client';
 import { EventLog } from './events';
 import { LensPanel } from './panel';
 import { LogpointStore, LogpointCodeLensProvider } from './logpoints';
-
-/** Stable, version-independent location for the agent so external terminals can
- * reference a path that survives extension updates. */
-const STABLE_DIR = path.join(os.homedir(), '.console-lens');
-const STABLE_PRELOAD = path.join(STABLE_DIR, 'out', 'agent', 'preload.js');
-/** Single, global event log written by the broker and read by the MCP server. */
-const GLOBAL_EVENTS = path.join(STABLE_DIR, 'events.json');
-const SHELL_MARKER_START = '# >>> Console Lens >>>';
-const SHELL_MARKER_END = '# <<< Console Lens <<<';
+import {
+  STABLE_DIR,
+  STABLE_PRELOAD,
+  GLOBAL_EVENTS,
+  detectShellRc,
+  shellBlock,
+  shellBlockRegex,
+  removeShellBlock,
+} from '../shared/shell-integration';
 
 /** Copy the agent + injector into STABLE_DIR, preserving the relative layout the
  * agent expects (`../shared`, `../../injector`). */
@@ -79,47 +78,6 @@ async function resolveWorkspaceFile(file: string): Promise<string | undefined> {
   return undefined;
 }
 
-function detectShellRc(): { file: string; shell: 'zsh' | 'bash' | 'fish' } {
-  const home = os.homedir();
-  const shell = process.env.SHELL ?? '';
-  if (shell.includes('fish')) {
-    return { file: path.join(home, '.config', 'fish', 'config.fish'), shell: 'fish' };
-  }
-  if (shell.includes('bash')) {
-    const bashrc = path.join(home, '.bashrc');
-    return { file: fs.existsSync(bashrc) ? bashrc : path.join(home, '.bash_profile'), shell: 'bash' };
-  }
-  return { file: path.join(home, '.zshrc'), shell: 'zsh' };
-}
-
-const PORT_FILE = '$HOME/.console-lens/port';
-const WSPORT_FILE = '$HOME/.console-lens/wsport';
-
-/**
- * Shell block that does NOT hard-code the port. It keeps a port already injected
- * by the extension (integrated terminals get their own window's port), and only
- * falls back to the active window's port file (written by the focused window) for
- * external terminals — so logs reach the window you're actually looking at.
- */
-function shellBlock(shell: 'zsh' | 'bash' | 'fish'): string {
-  const preload = '$HOME/.console-lens/out/agent/preload.js';
-  if (shell === 'fish') {
-    return [
-      SHELL_MARKER_START,
-      `set -gx NODE_OPTIONS "$NODE_OPTIONS --require ${preload}"`,
-      `if not set -q ${PORT_ENV}; set -gx ${PORT_ENV} (cat "${PORT_FILE}" 2>/dev/null; or echo 9111); end`,
-      `if not set -q ${WS_PORT_ENV}; set -gx ${WS_PORT_ENV} (cat "${WSPORT_FILE}" 2>/dev/null; or echo 9112); end`,
-      SHELL_MARKER_END,
-    ].join('\n');
-  }
-  return [
-    SHELL_MARKER_START,
-    `export NODE_OPTIONS="$NODE_OPTIONS --require ${preload}"`,
-    `export ${PORT_ENV}="\${${PORT_ENV}:-$(cat "${PORT_FILE}" 2>/dev/null || echo 9111)}"`,
-    `export ${WS_PORT_ENV}="\${${WS_PORT_ENV}:-$(cat "${WSPORT_FILE}" 2>/dev/null || echo 9112)}"`,
-    SHELL_MARKER_END,
-  ].join('\n');
-}
 
 export function activate(context: vscode.ExtensionContext): void {
   const config = () => vscode.workspace.getConfiguration('consoleLens');
@@ -151,7 +109,7 @@ export function activate(context: vscode.ExtensionContext): void {
     const block = shellBlock(shell);
     try {
       const existing = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
-      const re = new RegExp(`\\n?${SHELL_MARKER_START}[\\s\\S]*?${SHELL_MARKER_END}\\n?`);
+      const re = shellBlockRegex();
       const currentMatch = existing.match(re);
       if (currentMatch && currentMatch[0].trim() === block) {
         return 'unchanged'; // already up to date — don't rewrite on every launch
@@ -172,22 +130,13 @@ export function activate(context: vscode.ExtensionContext): void {
       return 'absent';
     }
     const { file } = detectShellRc();
-    try {
-      if (!fs.existsSync(file)) {
-        return 'absent';
-      }
-      const existing = fs.readFileSync(file, 'utf8');
-      const re = new RegExp(`\\n?${SHELL_MARKER_START}[\\s\\S]*?${SHELL_MARKER_END}\\n?`, 'g');
-      if (!re.test(existing)) {
-        return 'absent';
-      }
-      fs.writeFileSync(file, existing.replace(re, '\n'));
+    const status = removeShellBlock(file);
+    if (status === 'removed') {
       log(`shell integration removed from ${file}`);
-      return 'removed';
-    } catch (err) {
-      log(`shell integration removal failed for ${file}: ${(err as Error).message}`);
-      return 'error';
+    } else if (status === 'error') {
+      log(`shell integration removal failed for ${file}`);
     }
+    return status;
   };
 
   const reconcileShellIntegration = (): void => {

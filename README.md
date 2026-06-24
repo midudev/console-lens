@@ -19,38 +19,19 @@ function add(a, b) {
 
 ## Features
 
-- **Inline values** next to the exact source line, updated as your code runs, with
-  an `×N` execution counter.
-- **Execution history with timestamps** — hover a log to see every time it ran
-  (`HH:MM:SS.mmm`) with the full value each time.
-- **Errors & uncaught exceptions** shown inline in red, with a hover listing the full
-  stack (`fn @ file:line` + source line). Crash behaviour is preserved.
-- **Network requests** — `fetch` calls show `method · status · url` inline (Node and
-  browser), with request/response payloads in the hover.
-- **Logs & errors panel** — click the status bar to open a viewer of everything
-  captured: collapsible **object inspector**, type filters, text filter, event
-  counter, auto-scroll/pause, Clear, and "Go to source / Ask AI" actions.
-- **Pause/resume & export** — pause capture at any time (status bar / command) so a
-  noisy run can't bury what you care about, and **export the captured logs to a file**
-  for sharing or attaching to a bug report.
-- **More console methods** — `table`, `dir`, `assert`, `count`, `time`/`timeEnd`,
-  `trace`, `group` are captured too. High-frequency logs are rate-limited per
-  call site so a tight loop can't flood the editor.
-- **Logpoints** — log any expression on a line **without editing your code**.
-  `Cmd/Ctrl+Alt+L` (or right-click → "Add logpoint"), type an expression, and its
-  value shows inline (green 👁) and in the panel. Manage them via CodeLens + gutter.
-- **AI integration** — an `Ask AI` action in every hover sends the log/error to your
-  editor's chat, plus an **MCP server** so Copilot/Cursor/Claude/Windsurf/Cline can
-  read runtime logs & errors directly.
-- **Works in any terminal** — zero-config in VS Code terminals, and an automatic
-  shell integration for iTerm/Warp/Terminal.app and the rest.
-- **Node + browser, zero-config** — start any **Vite / Astro / Next.js** dev server
-  under the agent and the browser client is auto-injected into served HTML.
-- **Source-map resolved** — server-side logs in compiled templates map back to your
-  original `.astro` / `.tsx` / `.ts` source.
-- **Safe & non-intrusive** — serialization built on `util.inspect` (circular refs,
-  `BigInt`, `Map`/`Set`, errors…); the agent is fire-and-forget and never hangs or
-  crashes your app. Zero runtime dependencies in the agent. Fully tested.
+- 👁️ **Inline values** — `console.log` results next to the source line, with an `×N` run counter.
+- ⏱️ **History** — hover a log for every run, each with an `HH:MM:SS.mmm` timestamp.
+- 🛑 **Errors** — uncaught exceptions inline in red, full stack on hover; crashes still crash.
+- 🌐 **Network** — `fetch` shows `method · status · url` inline, payloads on hover (Node + browser).
+- 📋 **Panel** — searchable viewer with object inspector, filters, pause, clear and go-to-source.
+- ⏸️ **Pause & export** — freeze a noisy run, then save the captured logs to a file.
+- 🧰 **Full console API** — `table`, `dir`, `assert`, `count`, `time`, `trace`, `group`; rate-limited.
+- 📌 **Logpoints** — log any expression without editing code (`Cmd/Ctrl+Alt+L`).
+- 🤖 **AI-ready** — `Ask AI` in every hover, plus an MCP server for Copilot/Cursor/Claude/Windsurf/Cline.
+- 💻 **Any terminal** — zero-config in VS Code; auto shell integration for iTerm/Warp/Terminal.app.
+- ⚡ **Zero-config web** — Vite / Astro / Next dev servers auto-inject the browser client.
+- 🗺️ **Source-mapped** — compiled-template logs map back to your `.astro` / `.tsx` / `.ts` source.
+- 🛡️ **Safe** — fire-and-forget, never hangs your app; zero deps in the agent; fully tested.
 
 ## Architecture
 
@@ -95,12 +76,23 @@ node --require ./out/agent/preload.js app.js      # Terminal 2 — your app
 
 Each log/error/request is echoed in Terminal 1 with its `file:line`.
 
-## Use it inside VS Code
+## Install & use inside VS Code
 
-Install the packaged extension (`npm run reinstall`, see below) or press **F5** to
-launch an Extension Development Host. Then just run your app **in the integrated
-terminal** — the agent is injected automatically; nothing to configure. The
-`👁 Console Lens` status-bar item opens the panel.
+1. **Install the extension in your editor** — from the Marketplace
+   (`midudev.console-lens`), a packaged `.vsix` (`npm run reinstall`, see below), or
+   press **F5** to launch an Extension Development Host.
+2. **Open a _new_ terminal _after_ installing.** On first activation the extension
+   writes its shell integration to your profile (`~/.console-lens/` + a
+   `# >>> Console Lens >>>` block). A terminal — or dev server — that was already
+   running started **before** that hook existed, so it won't be wired up. Open a
+   fresh terminal (or run **Console Lens: Inject into active terminal**), then start
+   your app there.
+3. **Confirm it's connected.** On startup your dev server should print a
+   `console lens connected · http://localhost:<port> · browser logs on` line (the
+   `console lens` part on a green badge). If you don't see it, the terminal predates
+   the hook — open a new one and rerun.
+
+The `👁 Console Lens` status-bar item opens the panel.
 
 ### Any terminal (iTerm, Warp, Terminal.app, …)
 
@@ -203,7 +195,7 @@ cd examples/vite && npm install && npm run dev:lens
 | `Console Lens: Enable / Disable for all terminals` | Add/remove the shell integration |
 | `Console Lens: Inject into active terminal` | Wire up an already-open terminal |
 | `Console Lens: Copy NODE_OPTIONS…` | Copy the agent flag for a one-off command |
-| `Console Lens: Clean up` | Remove the shell integration & cache before uninstalling |
+| `Console Lens: Clean up` | Remove the shell integration & cache now (uninstall does this automatically) |
 
 ## Settings
 
@@ -233,9 +225,13 @@ npm test            # unit + TCP server + end-to-end agent integration tests
 ```
 
 After `npm run reinstall`, reload VS Code (`Cmd+Shift+P → Developer: Reload Window`).
-To uninstall cleanly, run **Console Lens: Clean up** first (removes the shell
-integration and `~/.console-lens/` cache), then
-`code --uninstall-extension console-lens.console-lens`.
+
+**Uninstalling is automatic.** Removing the extension — the Marketplace
+**Uninstall** button or `code --uninstall-extension midudev.console-lens` —
+runs a `vscode:uninstall` hook that, on the next restart, strips the shell-profile
+block and deletes the `~/.console-lens/` cache for you (the hook skips this during
+an *update*). Nothing to clean up by hand. To undo it sooner, or without
+uninstalling, run **Console Lens: Clean up**.
 
 ## Source maps & limitations
 

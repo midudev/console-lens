@@ -1,10 +1,11 @@
 {
   "name": "console-lens",
   "displayName": "Console Lens",
-  "publisher": "console-lens",
+  "publisher": "midudev",
+  "author": "Miguel Ángel Durán García",
   "description": "See console.log output and runtime values inline in your editor, in real time.",
   "icon": "icon.png",
-  "version": "0.1.21",
+  "version": "0.1.22",
   "license": "SEE LICENSE IN LICENSE",
   "repository": {
     "type": "git",
@@ -176,6 +177,7 @@
     }
   },
   "scripts": {
+    "vscode:uninstall": "node ./out/uninstall.js",
     "compile": "tsc -p ./",
     "watch": "tsc -w -p ./",
     "bundle": "npm run bundle:extension && npm run bundle:broker",

@@ -2,6 +2,22 @@
 
 All notable changes to Console Lens are documented here.
 
+## 0.1.22
+
+- **Clean uninstall, automatically.** Removing the extension now tears down its
+  system-wide footprint by itself: a `vscode:uninstall` hook strips the
+  `# >>> Console Lens >>>` block from your shell profile and deletes the
+  `~/.console-lens/` cache on the next restart. No more orphaned `NODE_OPTIONS`
+  after a plain Marketplace "Uninstall" — running **Console Lens: Clean up** first
+  is no longer required (it still works for undoing without uninstalling). The
+  hook detects a still-installed newer version and skips teardown during an
+  *update*.
+- **A stale shell integration can no longer break `node`.** The shell-profile
+  block now guards its `NODE_OPTIONS` export on the agent file existing
+  (`[ -f … ] && export …`), so a leftover block — or a deleted `~/.console-lens` —
+  goes inert instead of failing every `node` command with
+  `Cannot find module …/preload.js`.
+
 ## 0.1.21
 
 - **Richer browser value formatting.** The browser client now renders complex
