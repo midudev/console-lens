@@ -1,0 +1,19 @@
+{
+  "name": "console-lens-example-nextjs",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "next dev",
+    "dev:lens": "NODE_OPTIONS=\"--require ../../out/agent/preload.js\" CONSOLE_LENS_PORT=9111 next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "next": "^14.2.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.17"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "console-lens-example-vite",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:lens": "NODE_OPTIONS=\"--require ../../out/agent/preload.js\" CONSOLE_LENS_PORT=9111 vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}

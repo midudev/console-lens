@@ -1,0 +1,35 @@
+---
+// This frontmatter runs on the SERVER (Node). The Console Lens agent
+// (NODE_OPTIONS --require) captures these logs.
+const items = ['astro', 'console', 'lens'];
+console.log('Astro page rendered on server', { items, count: items.length });
+console.warn('server-side warning from Astro');
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Astro + Console Lens</title>
+  </head>
+  <body>
+    <h1>Astro + Console Lens</h1>
+    <p>Server logs come from the frontmatter; browser logs from the script below.</p>
+    <button id="btn">Clicked 0 times</button>
+
+    <script>
+      // Runs in the BROWSER. No Console Lens import needed — the agent
+      // auto-injects the browser client into the served HTML (`npm run dev:lens`).
+      console.log('Astro client script loaded', { hydrated: true });
+
+      let count = 0;
+      const btn = document.getElementById('btn');
+      btn?.addEventListener('click', () => {
+        count += 1;
+        console.log('astro button clicked', count);
+        btn.textContent = `Clicked ${count} times`;
+      });
+
+      setInterval(() => console.info('astro heartbeat', { count }), 2000);
+    </script>
+  </body>
+</html>

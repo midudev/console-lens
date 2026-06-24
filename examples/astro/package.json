@@ -1,0 +1,15 @@
+{
+  "name": "console-lens-example-astro",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "dev:lens": "NODE_OPTIONS=\"--require ../../out/agent/preload.js\" CONSOLE_LENS_PORT=9111 astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "devDependencies": {
+    "astro": "^4.16.0"
+  }
+}
