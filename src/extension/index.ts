@@ -257,7 +257,8 @@ export function activate(context: vscode.ExtensionContext): void {
   // Terminals already open at activation (attached once ports are known, below).
   const preexistingTerminals = [...vscode.window.terminals];
 
-  const eventLog = new EventLog();
+  const maxEvents = config().get<number>('maxEvents', 5000);
+  const eventLog = new EventLog(maxEvents);
 
   // The broker is the single writer of the global events.json the MCP server
   // reads — one writer across every window, so no concurrent-write races. This
@@ -294,7 +295,7 @@ export function activate(context: vscode.ExtensionContext): void {
     try {
       const child = child_process.spawn(
         process.execPath,
-        [brokerScript, '--port', String(preferredPort), '--events', eventsPath],
+        [brokerScript, '--port', String(preferredPort), '--events', eventsPath, '--max', String(maxEvents)],
         {
           detached: true,
           stdio: 'ignore',

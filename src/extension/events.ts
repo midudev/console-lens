@@ -24,18 +24,27 @@ export interface PanelEvent {
   table?: boolean;
 }
 
-const MAX_EVENTS = 5000;
+export const DEFAULT_MAX_EVENTS = 5000;
 
 /**
  * Chronological log of everything captured (logs + errors + network), feeding the
  * panel. Cleared by the server on a new run (see LensServer `newRun`), not per
  * message session — a dev server's sibling processes must not clear each other.
+ *
+ * Capped at `maxEvents` (configurable via `consoleLens.maxEvents`) so a tight,
+ * high-frequency log loop can't grow memory or the events file without bound;
+ * the oldest entries roll off.
  */
 export class EventLog {
   private events: PanelEvent[] = [];
   private nextId = 1;
   private listeners: Array<(e: PanelEvent) => void> = [];
   private clearListeners: Array<() => void> = [];
+  private readonly maxEvents: number;
+
+  constructor(maxEvents: number = DEFAULT_MAX_EVENTS) {
+    this.maxEvents = maxEvents && maxEvents > 0 ? Math.floor(maxEvents) : DEFAULT_MAX_EVENTS;
+  }
 
   /** Subscribe to new events. Returns a disposer to unsubscribe. */
   onEvent(fn: (e: PanelEvent) => void): () => void {
@@ -134,8 +143,8 @@ export class EventLog {
 
   private push(event: PanelEvent): void {
     this.events.push(event);
-    if (this.events.length > MAX_EVENTS) {
-      this.events.splice(0, this.events.length - MAX_EVENTS);
+    if (this.events.length > this.maxEvents) {
+      this.events.splice(0, this.events.length - this.maxEvents);
     }
     for (const fn of this.listeners) {
       try {

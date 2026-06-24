@@ -33,6 +33,8 @@ export interface BrokerOptions {
   tcpPort: number;
   /** Where to persist the event log for the MCP server (optional). */
   eventsPath?: string;
+  /** Max events kept (events.json + replay buffer). Default 5000. */
+  maxEvents?: number;
   /** Exit this many ms after the last subscriber leaves (0 = never). Default 10s. */
   idleExitMs?: number;
   /** Called when the broker decides to exit while idle (defaults to process.exit). */
@@ -40,8 +42,8 @@ export interface BrokerOptions {
   log?: (m: string) => void;
 }
 
-/** Cap on replayed history sent to a freshly-connected window. */
-const MAX_RAW = 5000;
+/** Default cap on replayed history sent to a freshly-connected window. */
+const DEFAULT_MAX_RAW = 5000;
 
 export class Broker {
   readonly tcpPort: number;
@@ -52,7 +54,8 @@ export class Broker {
   private subServer: net.Server | null = null;
   private readonly subscribers = new Set<net.Socket>();
   private raw: SnapshotItem[] = [];
-  private readonly eventLog = new EventLog();
+  private readonly eventLog: EventLog;
+  private readonly maxRaw: number;
   private idleTimer: ReturnType<typeof setTimeout> | undefined;
   private writeTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -60,6 +63,8 @@ export class Broker {
     this.tcpPort = opts.tcpPort;
     this.wsPort = wsPortFor(opts.tcpPort);
     this.subPort = subPortFor(opts.tcpPort);
+    this.maxRaw = opts.maxEvents && opts.maxEvents > 0 ? Math.floor(opts.maxEvents) : DEFAULT_MAX_RAW;
+    this.eventLog = new EventLog(this.maxRaw);
     this.server = new LensServer(opts.tcpPort, false);
     if (opts.eventsPath) {
       this.eventLog.onEvent(() => this.scheduleWrite());
@@ -87,8 +92,8 @@ export class Broker {
 
   private ingest(item: SnapshotItem): void {
     this.raw.push(item);
-    if (this.raw.length > MAX_RAW) {
-      this.raw.splice(0, this.raw.length - MAX_RAW);
+    if (this.raw.length > this.maxRaw) {
+      this.raw.splice(0, this.raw.length - this.maxRaw);
     }
     if (item.type === 'log') {
       this.eventLog.addLog(item.m);
@@ -260,23 +265,26 @@ export class Broker {
   }
 }
 
-function parseArgs(argv: string[]): { port: number; events?: string } {
+function parseArgs(argv: string[]): { port: number; events?: string; max?: number } {
   let port = 9111;
   let events: string | undefined;
+  let max: number | undefined;
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--port') {
       port = Number(argv[++i]) || port;
     } else if (argv[i] === '--events') {
       events = argv[++i];
+    } else if (argv[i] === '--max') {
+      max = Number(argv[++i]) || undefined;
     }
   }
-  return { port, events };
+  return { port, events, max };
 }
 
 // Run as a standalone process (spawned detached by the extension / CLI viewer).
 if (require.main === module) {
-  const { port, events } = parseArgs(process.argv.slice(2));
-  const broker = new Broker({ tcpPort: port, eventsPath: events });
+  const { port, events, max } = parseArgs(process.argv.slice(2));
+  const broker = new Broker({ tcpPort: port, eventsPath: events, maxEvents: max });
   // Losing the race for the port simply means another broker already runs — the
   // window that spawned us will connect to it instead.
   broker.start().catch(() => process.exit(0));
